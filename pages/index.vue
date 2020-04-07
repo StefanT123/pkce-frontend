@@ -1,72 +1,68 @@
 <template>
   <div class="container">
-    <div>
-      <logo />
-      <h1 class="title">
-        pkce-front
-      </h1>
-      <h2 class="subtitle">
-        Application for PKCE authentication with Laravel
-      </h2>
-      <div class="links">
-        <a
-          href="https://nuxtjs.org/"
-          target="_blank"
-          class="button--green"
-        >
-          Documentation
-        </a>
-        <a
-          href="https://github.com/nuxt/nuxt.js"
-          target="_blank"
-          class="button--grey"
-        >
-          GitHub
-        </a>
-      </div>
-    </div>
+    <button @click.prevent="openLoginWindow">Login</button>
   </div>
 </template>
 
 <script>
-import Logo from '~/components/Logo.vue'
+
+import crypto from 'crypto-js';
 
 export default {
-  components: {
-    Logo
+  data() {
+    return {
+      email: '',
+      password: '',
+      state: '',
+      challenge: '',
+    }
+  },
+
+  computed: {
+    loginUrl() {
+      return 'http://pkce-back.web/oauth/authorize?client_id=1&redirect_uri=http://localhost:3000/auth&response_type=code&scope=*&state=' + this.state + '&code_challenge=' + this.challenge + '&code_challenge_method=S256'
+    }
+  },
+
+  mounted() {
+    window.addEventListener('message', (e) => {
+      if (e.origin !== 'http://localhost:3000' || ! Object.keys(e.data).includes('access_token')) {
+        return;
+      }
+
+      const {token_type, expires_in, access_token, refresh_token} = e.data;
+      console.log(e.data);
+      this.$axios.setToken(access_token, token_type);
+
+      this.$axios.$get('http://pkce-back.web/api/user')
+        .then(resp => {
+          console.log(resp);
+        })
+    });
+
+    this.state = this.createRandomString(40);
+    const verifier = this.createRandomString(128);
+
+    this.challenge = this.base64Url(crypto.SHA256(verifier));
+    window.localStorage.setItem('state', this.state);
+    window.localStorage.setItem('verifier', verifier);
+  },
+
+  methods: {
+    openLoginWindow() {
+      window.open(this.loginUrl, 'popup', 'width=700,height=700');
+    },
+
+    createRandomString(num) {
+      return [...Array(num)].map(() => Math.random().toString(36)[2]).join('')
+    },
+
+    base64Url(string) {
+      return string.toString(crypto.enc.Base64)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+    }
   }
 }
 </script>
-
-<style>
-.container {
-  margin: 0 auto;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-}
-
-.title {
-  font-family: 'Quicksand', 'Source Sans Pro', -apple-system, BlinkMacSystemFont,
-    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  display: block;
-  font-weight: 300;
-  font-size: 100px;
-  color: #35495e;
-  letter-spacing: 1px;
-}
-
-.subtitle {
-  font-weight: 300;
-  font-size: 42px;
-  color: #526488;
-  word-spacing: 5px;
-  padding-bottom: 15px;
-}
-
-.links {
-  padding-top: 15px;
-}
-</style>
